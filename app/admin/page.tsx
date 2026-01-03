@@ -18,18 +18,23 @@ type Listing = {
   sale_price_cad: number | null;
   status: string;
   category: string;
+  coral_type: string | null;
+  variant: string | null;
+  image_url: string | null;
   created_at: string;
 };
 
 export default function AdminPage() {
-  // ✅ TOUS LES HOOKS D’ABORD (sinon erreur React 310)
+  // ✅ TOUS LES HOOKS EN PREMIER
   const [authorized, setAuthorized] = useState(false);
   const [password, setPassword] = useState("");
 
+  // SHOPS
   const [shops, setShops] = useState<Shop[]>([]);
   const [shopName, setShopName] = useState("");
   const [shopUrl, setShopUrl] = useState("");
 
+  // LISTINGS
   const [listings, setListings] = useState<Listing[]>([]);
   const [selectedShopId, setSelectedShopId] = useState("");
   const [titleRaw, setTitleRaw] = useState("");
@@ -38,6 +43,10 @@ export default function AdminPage() {
   const [salePriceCad, setSalePriceCad] = useState("");
   const [category, setCategory] = useState("torch");
   const [status, setStatus] = useState("available");
+
+  // 🔥 NOUVEAUX CHAMPS
+  const [variant, setVariant] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
 
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -65,7 +74,9 @@ export default function AdminPage() {
   const loadListings = async () => {
     const { data, error } = await supabase
       .from("listings")
-      .select("id, shop_id, title_raw, url, price_cad, sale_price_cad, status, category, created_at")
+      .select(
+        "id, shop_id, title_raw, url, price_cad, sale_price_cad, status, category, coral_type, variant, image_url, created_at"
+      )
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -73,6 +84,7 @@ export default function AdminPage() {
       setMsg("Erreur listings: " + error.message);
       return;
     }
+
     setListings((data as Listing[]) ?? []);
   };
 
@@ -83,10 +95,10 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authorized]);
 
-  // ✅ UI LOGIN (après hooks)
+  // LOGIN UI
   if (!authorized) {
     return (
-      <main style={{ padding: 40, fontFamily: "Arial, sans-serif" }}>
+      <main style={{ padding: 40 }}>
         <h1>Admin</h1>
         <p>Mot de passe requis</p>
         <input
@@ -99,7 +111,7 @@ export default function AdminPage() {
           onClick={() => {
             const expected = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
             if (!expected) {
-              alert("NEXT_PUBLIC_ADMIN_PASSWORD manquant sur Vercel (ajoute-le puis redeploy).");
+              alert("NEXT_PUBLIC_ADMIN_PASSWORD manquant");
               return;
             }
             if (password === expected) setAuthorized(true);
@@ -158,6 +170,9 @@ export default function AdminPage() {
       sale_price_cad: salePrice,
       category,
       status,
+      coral_type: "torch",
+      variant: variant.trim().toLowerCase() || null,
+      image_url: imageUrl.trim() || null,
     });
 
     if (error) {
@@ -169,6 +184,10 @@ export default function AdminPage() {
     setListingUrl("");
     setPriceCad("");
     setSalePriceCad("");
+    setVariant("");
+    setImageUrl("");
+    setCategory("torch");
+    setStatus("available");
     loadListings();
   };
 
@@ -183,7 +202,7 @@ export default function AdminPage() {
   };
 
   return (
-    <main style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
+    <main style={{ padding: 24 }}>
       <h1>Admin sécurisé</h1>
 
       {msg && (
@@ -210,46 +229,105 @@ export default function AdminPage() {
       <hr style={{ margin: "20px 0" }} />
 
       <h2>Ajouter un corail</h2>
-      <select value={selectedShopId} onChange={(e) => setSelectedShopId(e.target.value)}>
-        <option value="">Choisir un shop</option>
-        {shops.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
 
-      <input placeholder="Titre" value={titleRaw} onChange={(e) => setTitleRaw(e.target.value)} />
-      <input placeholder="URL" value={listingUrl} onChange={(e) => setListingUrl(e.target.value)} />
-      <input placeholder="Prix" value={priceCad} onChange={(e) => setPriceCad(e.target.value)} />
-      <input
-        placeholder="Prix promo"
-        value={salePriceCad}
-        onChange={(e) => setSalePriceCad(e.target.value)}
-      />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <select value={selectedShopId} onChange={(e) => setSelectedShopId(e.target.value)}>
+          <option value="">Choisir un shop</option>
+          {shops.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
 
-      <select value={category} onChange={(e) => setCategory(e.target.value)}>
-        <option value="torch">torch</option>
-        <option value="acropora">acropora</option>
-        <option value="zoa">zoa</option>
-      </select>
+        <input
+          placeholder="Titre brut (ex: Holy Grail Torch 2 heads)"
+          value={titleRaw}
+          onChange={(e) => setTitleRaw(e.target.value)}
+          style={{ minWidth: 280 }}
+        />
 
-      <select value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="available">available</option>
-        <option value="sold">sold</option>
-        <option value="archived">archived</option>
-      </select>
+        <input
+          placeholder="Variant (ex: holy grail)"
+          value={variant}
+          onChange={(e) => setVariant(e.target.value)}
+          style={{ minWidth: 180 }}
+        />
 
-      <button onClick={addListing}>Ajouter corail</button>
+        <input
+          placeholder="Image URL"
+          value={imageUrl}
+          onChange={(e) => setImageUrl(e.target.value)}
+          style={{ minWidth: 280 }}
+        />
+
+        <input
+          placeholder="URL produit"
+          value={listingUrl}
+          onChange={(e) => setListingUrl(e.target.value)}
+          style={{ minWidth: 280 }}
+        />
+
+        <input
+          placeholder="Prix CAD"
+          value={priceCad}
+          onChange={(e) => setPriceCad(e.target.value)}
+          style={{ width: 120 }}
+        />
+
+        <input
+          placeholder="Prix soldé (optionnel)"
+          value={salePriceCad}
+          onChange={(e) => setSalePriceCad(e.target.value)}
+          style={{ width: 170 }}
+        />
+
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="torch">torch</option>
+          <option value="acropora">acropora</option>
+          <option value="zoa">zoa</option>
+        </select>
+
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="available">available</option>
+          <option value="sold">sold</option>
+          <option value="archived">archived</option>
+        </select>
+
+        <button onClick={addListing}>Ajouter corail</button>
+        <button onClick={() => { loadShops(); loadListings(); }}>Rafraîchir</button>
+      </div>
 
       <h2 style={{ marginTop: 24 }}>Derniers listings</h2>
       <ul style={{ marginTop: 12 }}>
         {listings.map((l) => {
           const shop = shopsById.get(l.shop_id);
           return (
-            <li key={l.id}>
-              <b>{l.title_raw}</b> — {shop ? shop.name : l.shop_id} — {l.category} — {l.status}{" "}
-              <button onClick={() => deleteListing(l.id)}>❌</button>
+            <li key={l.id} style={{ marginBottom: 10 }}>
+              <div>
+                <b>{l.title_raw}</b>{" "}
+                <span style={{ opacity: 0.7 }}>
+                  — {l.variant ?? "—"} — {shop?.name ?? l.shop_id} — {l.category} — {l.status}
+                </span>
+              </div>
+              <div style={{ opacity: 0.9 }}>
+                Prix: {l.price_cad ?? "—"} CAD
+                {l.sale_price_cad != null ? ` (soldé: ${l.sale_price_cad} CAD)` : ""}
+                {l.url ? (
+                  <>
+                    {" "}
+                    — <a href={l.url} target="_blank" rel="noreferrer">lien</a>
+                  </>
+                ) : null}
+                {l.image_url ? (
+                  <>
+                    {" "}
+                    — <a href={l.image_url} target="_blank" rel="noreferrer">image</a>
+                  </>
+                ) : null}
+                {" "}
+                <button onClick={() => deleteListing(l.id)}>❌</button>
+              </div>
             </li>
           );
         })}
