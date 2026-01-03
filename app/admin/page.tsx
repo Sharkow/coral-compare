@@ -22,22 +22,50 @@ type Listing = {
 };
 
 export default function AdminPage() {
-  // ---------- Shops ----------
+  // 🔐 AUTH SIMPLE
+  const [authorized, setAuthorized] = useState(false);
+  const [password, setPassword] = useState("");
+
+  if (!authorized) {
+    return (
+      <main style={{ padding: 40 }}>
+        <h1>Admin</h1>
+        <p>Mot de passe requis</p>
+        <input
+          type="password"
+          placeholder="Mot de passe admin"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <button
+          onClick={() => {
+            if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
+              setAuthorized(true);
+            } else {
+              alert("Mot de passe incorrect");
+            }
+          }}
+        >
+          Entrer
+        </button>
+      </main>
+    );
+  }
+
+  // ---------- SHOPS ----------
   const [shops, setShops] = useState<Shop[]>([]);
   const [shopName, setShopName] = useState("");
   const [shopUrl, setShopUrl] = useState("");
 
-  // ---------- Listings ----------
+  // ---------- LISTINGS ----------
   const [listings, setListings] = useState<Listing[]>([]);
-  const [selectedShopId, setSelectedShopId] = useState<string>("");
+  const [selectedShopId, setSelectedShopId] = useState("");
   const [titleRaw, setTitleRaw] = useState("");
   const [listingUrl, setListingUrl] = useState("");
   const [priceCad, setPriceCad] = useState("");
   const [salePriceCad, setSalePriceCad] = useState("");
   const [category, setCategory] = useState("torch");
   const [status, setStatus] = useState("available");
-
-  const [msg, setMsg] = useState<string | null>(null);
 
   const shopsById = useMemo(() => {
     const m = new Map<string, Shop>();
@@ -46,256 +74,108 @@ export default function AdminPage() {
   }, [shops]);
 
   const loadShops = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("shops")
       .select("id, name, website_url")
       .order("created_at", { ascending: false });
-
-    if (error) {
-      setMsg("Erreur shops: " + error.message);
-      return;
-    }
-
     setShops(data ?? []);
-    // auto-select first shop for listings form
     if (!selectedShopId && data && data.length > 0) setSelectedShopId(data[0].id);
   };
 
   const loadListings = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("listings")
-      .select("id, shop_id, title_raw, url, price_cad, sale_price_cad, status, category, created_at")
+      .select("*")
       .order("created_at", { ascending: false })
       .limit(50);
-
-    if (error) {
-      setMsg("Erreur listings: " + error.message);
-      return;
-    }
     setListings((data as Listing[]) ?? []);
   };
 
   useEffect(() => {
     loadShops();
     loadListings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const addShop = async () => {
-    setMsg(null);
     if (!shopName.trim()) return;
-
-    const { error } = await supabase.from("shops").insert({
+    await supabase.from("shops").insert({
       name: shopName.trim(),
       website_url: shopUrl.trim() || null,
     });
-
-    if (error) {
-      setMsg("Erreur Supabase (add shop): " + error.message);
-      return;
-    }
-
     setShopName("");
     setShopUrl("");
-    await loadShops();
+    loadShops();
   };
 
   const deleteShop = async (id: string) => {
-    setMsg(null);
-    const { error } = await supabase.from("shops").delete().eq("id", id);
-    if (error) {
-      setMsg("Erreur Supabase (delete shop): " + error.message);
-      return;
-    }
-    await loadShops();
-    await loadListings();
+    await supabase.from("shops").delete().eq("id", id);
+    loadShops();
+    loadListings();
   };
 
   const addListing = async () => {
-    setMsg(null);
-    if (!selectedShopId) {
-      setMsg("Choisis un shop.");
-      return;
-    }
-    if (!titleRaw.trim()) {
-      setMsg("Titre obligatoire.");
-      return;
-    }
+    if (!selectedShopId || !titleRaw.trim()) return;
 
-    const price = priceCad.trim() ? Number(priceCad) : null;
-    const salePrice = salePriceCad.trim() ? Number(salePriceCad) : null;
-
-    if (priceCad.trim() && Number.isNaN(price)) {
-      setMsg("Prix invalide.");
-      return;
-    }
-    if (salePriceCad.trim() && Number.isNaN(salePrice)) {
-      setMsg("Prix promo invalide.");
-      return;
-    }
-
-    const { error } = await supabase.from("listings").insert({
+    await supabase.from("listings").insert({
       shop_id: selectedShopId,
       title_raw: titleRaw.trim(),
       url: listingUrl.trim() || null,
-      price_cad: price,
-      sale_price_cad: salePrice,
+      price_cad: priceCad ? Number(priceCad) : null,
+      sale_price_cad: salePriceCad ? Number(salePriceCad) : null,
       category,
       status,
     });
-
-    if (error) {
-      setMsg("Erreur Supabase (add listing): " + error.message);
-      return;
-    }
 
     setTitleRaw("");
     setListingUrl("");
     setPriceCad("");
     setSalePriceCad("");
-    setCategory("torch");
-    setStatus("available");
-    await loadListings();
+    loadListings();
   };
 
   const deleteListing = async (id: string) => {
-    setMsg(null);
-    const { error } = await supabase.from("listings").delete().eq("id", id);
-    if (error) {
-      setMsg("Erreur Supabase (delete listing): " + error.message);
-      return;
-    }
-    await loadListings();
+    await supabase.from("listings").delete().eq("id", id);
+    loadListings();
   };
 
   return (
-    <main style={{ padding: 24, fontFamily: "Arial, sans-serif" }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Admin</h1>
-
-      {msg && (
-        <div style={{ marginTop: 12, padding: 10, background: "#fff3cd", borderRadius: 8 }}>
-          {msg}
-        </div>
-      )}
-
-      <hr style={{ margin: "20px 0" }} />
+    <main style={{ padding: 24 }}>
+      <h1>Admin sécurisé</h1>
 
       <h2>Shops</h2>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-        <input
-          placeholder="Nom du shop"
-          value={shopName}
-          onChange={(e) => setShopName(e.target.value)}
-        />
-        <input
-          placeholder="URL (optionnel)"
-          value={shopUrl}
-          onChange={(e) => setShopUrl(e.target.value)}
-        />
-        <button onClick={addShop}>Ajouter shop</button>
-        <button onClick={() => { loadShops(); loadListings(); }}>Rafraîchir</button>
-      </div>
+      <input placeholder="Nom" value={shopName} onChange={(e) => setShopName(e.target.value)} />
+      <input placeholder="URL" value={shopUrl} onChange={(e) => setShopUrl(e.target.value)} />
+      <button onClick={addShop}>Ajouter shop</button>
 
-      <ul style={{ marginTop: 12 }}>
+      <ul>
         {shops.map((s) => (
-          <li key={s.id} style={{ marginBottom: 8 }}>
-            <b>{s.name}</b>{" "}
-            {s.website_url ? (
-              <a href={s.website_url} target="_blank" rel="noreferrer">
-                {s.website_url}
-              </a>
-            ) : null}{" "}
-            <button onClick={() => deleteShop(s.id)}>❌</button>
+          <li key={s.id}>
+            {s.name} <button onClick={() => deleteShop(s.id)}>❌</button>
           </li>
         ))}
       </ul>
 
-      <hr style={{ margin: "20px 0" }} />
+      <hr />
 
-      <h2>Ajouter un corail (listing)</h2>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-        <select value={selectedShopId} onChange={(e) => setSelectedShopId(e.target.value)}>
-          <option value="">-- Choisir un shop --</option>
-          {shops.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+      <h2>Ajouter un corail</h2>
+      <select value={selectedShopId} onChange={(e) => setSelectedShopId(e.target.value)}>
+        <option value="">Choisir un shop</option>
+        {shops.map((s) => (
+          <option key={s.id} value={s.id}>{s.name}</option>
+        ))}
+      </select>
 
-        <input
-          placeholder="Titre brut (ex: Gold Torch 2 heads)"
-          value={titleRaw}
-          onChange={(e) => setTitleRaw(e.target.value)}
-          style={{ minWidth: 280 }}
-        />
+      <input placeholder="Titre" value={titleRaw} onChange={(e) => setTitleRaw(e.target.value)} />
+      <input placeholder="URL" value={listingUrl} onChange={(e) => setListingUrl(e.target.value)} />
+      <input placeholder="Prix" value={priceCad} onChange={(e) => setPriceCad(e.target.value)} />
+      <button onClick={addListing}>Ajouter corail</button>
 
-        <input
-          placeholder="URL (optionnel)"
-          value={listingUrl}
-          onChange={(e) => setListingUrl(e.target.value)}
-          style={{ minWidth: 260 }}
-        />
-
-        <input
-          placeholder="Prix CAD (ex: 149.99)"
-          value={priceCad}
-          onChange={(e) => setPriceCad(e.target.value)}
-          style={{ width: 140 }}
-        />
-
-        <input
-          placeholder="Prix promo (optionnel)"
-          value={salePriceCad}
-          onChange={(e) => setSalePriceCad(e.target.value)}
-          style={{ width: 160 }}
-        />
-
-        <select value={category} onChange={(e) => setCategory(e.target.value)}>
-          <option value="torch">torch</option>
-          <option value="acropora">acropora</option>
-          <option value="zoa">zoa</option>
-        </select>
-
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="available">available</option>
-          <option value="sold">sold</option>
-          <option value="archived">archived</option>
-        </select>
-
-        <button onClick={addListing}>Ajouter corail</button>
-      </div>
-
-      <h2 style={{ marginTop: 24 }}>Derniers listings</h2>
-      <ul style={{ marginTop: 12 }}>
-        {listings.map((l) => {
-          const shop = shopsById.get(l.shop_id);
-          return (
-            <li key={l.id} style={{ marginBottom: 10 }}>
-              <div>
-                <b>{l.title_raw}</b>{" "}
-                <span style={{ opacity: 0.7 }}>
-                  ({shop ? shop.name : l.shop_id}) — {l.category} — {l.status}
-                </span>
-              </div>
-              <div style={{ opacity: 0.85 }}>
-                {l.price_cad != null ? `${l.price_cad} CAD` : "—"}
-                {l.sale_price_cad != null ? ` (sale: ${l.sale_price_cad} CAD)` : ""}
-                {l.url ? (
-                  <>
-                    {" "}
-                    —{" "}
-                    <a href={l.url} target="_blank" rel="noreferrer">
-                      lien
-                    </a>
-                  </>
-                ) : null}
-                {" "}
-                <button onClick={() => deleteListing(l.id)}>❌</button>
-              </div>
-            </li>
-          );
-        })}
+      <ul>
+        {listings.map((l) => (
+          <li key={l.id}>
+            {l.title_raw} <button onClick={() => deleteListing(l.id)}>❌</button>
+          </li>
+        ))}
       </ul>
     </main>
   );
